@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "447722802089",
+    "project_id": "masterenglishfluency-933e4",
+    "storage_bucket": "masterenglishfluency-933e4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:447722802089:android:5f92a7f383674eb7e912b8",
+        "android_client_info": {
+          "package_name": "masterenglishfluency.com"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBETUs2mhmZ0N2DTtoPgqEue73z5Tvrn1E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
