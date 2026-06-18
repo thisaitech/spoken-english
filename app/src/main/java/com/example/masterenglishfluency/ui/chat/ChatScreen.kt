@@ -122,7 +122,17 @@ fun ChatScreen(
         }
     }
 
-    // Duplicate permissionLauncher removed
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            startListening(speechRecognizer) { listening ->
+                viewModel.setListening(listening)
+            }
+        } else {
+            Toast.makeText(context, "Microphone permission required", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     Column(
         modifier = Modifier
