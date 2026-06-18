@@ -64,7 +64,7 @@ fun DashboardScreen(
                 )
                 1 -> VocabularyTab(viewModel = viewModel)
                 2 -> PerformanceTab(viewModel = viewModel, chatViewModel = chatViewModel)
-                3 -> ChatScreen(onBack = { activeTab = 0 }, viewModel = chatViewModel)
+                3 -> ChatScreen(onBack = { activeTab = 0 }, viewModel = chatViewModel, speechRecognizer = null, tts = null)
             }
         }
     }

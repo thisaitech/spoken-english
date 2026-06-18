@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.internal.KaptWithoutKotlincTask
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
@@ -9,6 +10,15 @@ plugins {
     alias(libs.plugins.google.services)
     alias(libs.plugins.firebase.crashlytics)
 }
+
+// Read local.properties safely — key never enters version control
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) load(f.inputStream())
+}
+val openAiKey: String = localProps.getProperty("openai.api.key", "")
+val geminiKey: String = localProps.getProperty("gemini.api.key", "")
+val geminiLiveModel: String = localProps.getProperty("gemini.live.model", "gemini-2.0-flash-live-001")
 
 android {
     namespace = "com.example.masterenglishfluency"
@@ -22,6 +32,11 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Inject key into BuildConfig so it is only in the compiled binary, not in source
+        buildConfigField("String", "OPENAI_API_KEY", "\"$openAiKey\"")
+        buildConfigField("String", "GEMINI_API_KEY", "\"$geminiKey\"")
+        buildConfigField("String", "GEMINI_LIVE_MODEL", "\"$geminiLiveModel\"")
     }
 
     signingConfigs {
@@ -51,7 +66,7 @@ android {
     buildFeatures {
         compose = true
         aidl = false
-        buildConfig = false
+        buildConfig = true
         shaders = false
     }
 
@@ -96,6 +111,7 @@ dependencies {
     implementation(libs.androidx.navigation3.ui)
     implementation(libs.androidx.navigation3.runtime)
     implementation(libs.androidx.lifecycle.viewmodel.navigation3)
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)

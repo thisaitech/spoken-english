@@ -79,6 +79,7 @@ fun SpeakingPracticeScreen(
     val secondsElapsed by viewModel.secondsElapsed.collectAsState()
     val isProcessing by viewModel.isProcessing.collectAsState()
     val showFeedback by viewModel.showFeedback.collectAsState()
+    val showSuccess by viewModel.showSuccess.collectAsState()
     val topicIndex by viewModel.topicIndex.collectAsState()
     val currentSession by viewModel.currentSession.collectAsState()
     val originalParagraph by viewModel.currentParagraph.collectAsState()
@@ -270,7 +271,6 @@ private fun ReadingInputSection(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .weight(1f)
             .verticalScroll(scrollState),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -479,7 +479,6 @@ private fun AssessmentReportSection(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .weight(1f)
             .verticalScroll(scrollState),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {

@@ -49,6 +49,9 @@ class SpeakingViewModel(
     private val _showFeedback = MutableStateFlow(false)
     val showFeedback: StateFlow<Boolean> = _showFeedback.asStateFlow()
 
+    private val _showSuccess = MutableStateFlow(false)
+    val showSuccess: StateFlow<Boolean> = _showSuccess.asStateFlow()
+
     private val _showQuickSummary = MutableStateFlow(false)
     val showQuickSummary: StateFlow<Boolean> = _showQuickSummary.asStateFlow()
 
@@ -392,11 +395,11 @@ class SpeakingViewModel(
         else "Great accuracy! Now focus on smoother pacing and natural intonation."
 
         val aiFeedbackTips = buildString {
-            if (pauseCount >= 3) append("• Reduce filler words (uh, um, er). Pause silently instead. ")
-            if (skippedSentences.isNotEmpty()) append("• Re-read skipped sentences aloud 3 times each. ")
-            if (accuracyScore < 75) append("• Slow down and read word-by-word to improve accuracy. ")
-            if (extraWords.isNotEmpty()) append("• Avoid inserting words not in the original text. ")
-            if (isEmpty()) append("• Great performance! Maintain your pace and work on natural stress patterns.")
+            if (pauseCount >= 3) append("Reduce filler words (uh, um, er). Pause silently instead. ")
+            if (skippedSentences.isNotEmpty()) append("Re-read skipped sentences aloud 3 times each. ")
+            if (accuracyScore < 75) append("Slow down and read word-by-word to improve accuracy. ")
+            if (extraWords.isNotEmpty()) append("Avoid inserting words not in the original text. ")
+            if (this.isEmpty()) append("Great performance! Maintain your pace and work on natural stress patterns.")
         }.trim()
 
         return JSONObject().apply {
@@ -793,9 +796,16 @@ class SpeakingViewModel(
 
                 _currentSession.value   = session
                 _showQuickSummary.value = false
-                _showFeedback.value = true
                 _isAssistantEnabled.value = true
                 val feedbackText = buildAssistantFeedbackText(session)
+                val mistakesDetected = hasMistakes(session, originalText)
+                if (mistakesDetected) {
+                    _showFeedback.value = true
+                    _showSuccess.value = false
+                } else {
+                    _showFeedback.value = false
+                    _showSuccess.value = true
+                }
                 _assistantReplyText.value = feedbackText
                 _assistantStatus.value = feedbackText
                 _assistantMessages.value = listOf(
@@ -846,7 +856,7 @@ class SpeakingViewModel(
     }
 
     private fun enrichSessionWithAssistantHistory(aiResponse: String): String {
-        if (_assistantMessages.isEmpty()) return aiResponse
+        if (_assistantMessages.value.isEmpty()) return aiResponse
         return try {
             val json = if (aiResponse.startsWith("{")) JSONObject(aiResponse) else JSONObject()
             json.put("assistantConversationHistory", JSONArray(_assistantMessages.value.map { message ->
@@ -868,6 +878,29 @@ class SpeakingViewModel(
         _showFeedback.value = false
         _showQuickSummary.value = false
         _userRealSpeech.value = ""
+    }
+
+    fun hasMistakes(session: SpeakingSession, originalText: String): Boolean {
+        val transcript = session.transcript.trim()
+        if (transcript.isBlank() || originalText.isBlank()) return false
+
+        val spokenSet = cleanRegex.replace(transcript, "").lowercase()
+            .split(Regex("\\s+")).filter { it.isNotBlank() }.toSet()
+        val diff = computeWordDiff(originalText, transcript)
+        @Suppress("UNCHECKED_CAST")
+        val missedWords = diff["missedWords"] as List<String>
+        @Suppress("UNCHECKED_CAST")
+        val incorrectWords = diff["incorrectWords"] as List<String>
+        @Suppress("UNCHECKED_CAST")
+        val extraWords = diff["extraWords"] as List<String>
+        val pauseCount = detectPauses(transcript)
+        val skippedSentences = computeSkippedSentences(originalText, spokenSet)
+
+        return missedWords.isNotEmpty()
+                || incorrectWords.isNotEmpty()
+                || extraWords.isNotEmpty()
+                || skippedSentences.isNotEmpty()
+                || pauseCount >= 3
     }
 
     override fun onCleared() {

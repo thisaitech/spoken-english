@@ -1,39 +1,50 @@
 package com.example.masterenglishfluency.ui.chat
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Bundle
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import android.speech.tts.TextToSpeech
+import android.util.Log
 import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.runtime.remember
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
@@ -43,84 +54,131 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.masterenglishfluency.ui.components.AppIcons
+import com.example.masterenglishfluency.ui.theme.MasterEnglishFluencyTheme
+import java.util.Locale
 
+class TalkWithAiActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+
+        setContent {
+            MasterEnglishFluencyTheme {
+                ChatScreen(
+                    onBack = { finish() },
+                    viewModel = ChatViewModel()
+                )
+            }
+        }
+    }
+}
+
+// Main Composable Screen for TalkWithAi
 @Composable
 fun ChatScreen(
     onBack: () -> Unit,
-    viewModel: ChatViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    viewModel: ChatViewModel
 ) {
     val context = LocalContext.current
-    val voiceStatus by viewModel.voiceStatus.collectAsState()
-    val isConversationActive by viewModel.isConversationActive.collectAsState()
+    // Initialize SpeechRecognizer
+    val speechRecognizer = androidx.compose.runtime.remember {
+        SpeechRecognizer.createSpeechRecognizer(context).apply {
+            setRecognitionListener(object : RecognitionListener {
+                override fun onReadyForSpeech(params: Bundle?) {}
+                override fun onBeginningOfSpeech() {}
+                override fun onRmsChanged(rmsdB: Float) {}
+                override fun onBufferReceived(buffer: ByteArray?) {}
+                override fun onEndOfSpeech() {}
+                override fun onError(error: Int) {
+                    // Stop listening on error
+                    // You may want to handle specific error codes
+                }
+                override fun onResults(results: Bundle?) {
+                    val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    if (!matches.isNullOrEmpty()) {
+                        // TODO: Send the recognized text to the ViewModel
+                        Log.d("ChatScreen", "Recognized: ${matches[0]}")
+                    }
+                }
+                override fun onPartialResults(partialResults: Bundle?) {}
+                override fun onEvent(eventType: Int, params: Bundle?) {}
+            })
+        }
+    }
+    
+    val messages by viewModel.messages.collectAsState()
     val isListening by viewModel.isListening.collectAsState()
     val isThinking by viewModel.isThinking.collectAsState()
-    val isSpeaking by viewModel.isSpeakingResponse.collectAsState()
+    val isConversationActive by viewModel.isConversationActive.collectAsState()
+    val voiceStatus by viewModel.voiceStatus.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
 
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) {
-            viewModel.startVoiceConversation(context)
-        } else {
-            Toast.makeText(
-                context,
-                "Microphone permission is required for Talk with AI.",
-                Toast.LENGTH_SHORT
-            ).show()
+
+
+    val listState = rememberLazyListState()
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) {
+            listState.animateScrollToItem(messages.lastIndex)
         }
     }
 
-    val activeGlow = isConversationActive || isListening || isThinking || isSpeaking
-    val transition = rememberInfiniteTransition(label = "micPulse")
-    val scale by transition.animateFloat(
-        initialValue = 1f,
-        targetValue = if (activeGlow) 1.12f else 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(900),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "micScale"
-    )
+    // Duplicate permissionLauncher removed
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFFF6F8FA))
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Header(onBack = onBack)
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            shape = RoundedCornerShape(20.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Voice Conversation Mode",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF2C3E50)
-                )
-                Text(
-                    text = voiceStatus,
-                    fontSize = 13.sp,
-                    color = Color(0xFF7F8C8D),
-                    fontWeight = FontWeight.Medium
-                )
+                IconButton(onClick = onBack) {
+                    Icon(
+                        imageVector = AppIcons.INSTANCE.Back,
+                        contentDescription = "Back",
+                        tint = Color(0xFF2C3E50)
+                    )
+                }
+                Spacer(modifier = Modifier.width(4.dp))
+                Column {
+                    Text(
+                        text = "Talk with AI",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF2C3E50)
+                    )
+                    Text(
+                        text = "Voice in, voice out",
+                        fontSize = 12.sp,
+                        color = Color(0xFF7F8C8D)
+                    )
+                }
             }
         }
 
-        Spacer(modifier = Modifier.weight(1f))
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            items(messages, key = { "${it.isUser}-${it.text.hashCode()}" }) { message ->
+                ChatBubble(message = message)
+            }
+        }
 
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color.White)
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            val scale = if (isListening) 1.12f else 1f
+            
             Button(
                 onClick = {
                     val granted = ContextCompat.checkSelfPermission(
@@ -128,72 +186,127 @@ fun ChatScreen(
                         Manifest.permission.RECORD_AUDIO
                     ) == PackageManager.PERMISSION_GRANTED
 
-                    if (isConversationActive) {
-                        viewModel.stopVoiceConversation()
-                    } else if (granted) {
-                        viewModel.startVoiceConversation(context)
+                    if (granted) {
+                        startListening(speechRecognizer) { listening -> 
+                            viewModel.setListening(listening) 
+                        }
                     } else {
                         permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                     }
                 },
                 modifier = Modifier
-                    .size(120.dp)
+                    .size(88.dp)
                     .scale(scale),
                 shape = CircleShape,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isConversationActive) Color(0xFFEB5757) else Color(0xFF2F80ED)
-                )
+                    containerColor = if (isListening) Color(0xFFEB5757) else Color(0xFF2F80ED)
+                ),
+                enabled = !isThinking && speechRecognizer != null
             ) {
                 Icon(
                     imageVector = AppIcons.INSTANCE.Mic,
                     contentDescription = "Talk with AI",
                     tint = Color.White,
-                    modifier = Modifier.size(42.dp)
+                    modifier = Modifier.size(36.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = if (isConversationActive) "Tap to Stop" else "Talk with AI",
-                fontSize = 16.sp,
+                text = when {
+                    isThinking -> "Thinking..."
+                    isListening -> "Listening..."
+                    else -> "Tap mic to speak"
+                },
+                fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF2C3E50)
-            )
-            Text(
-                text = "Speak naturally and the assistant will reply aloud",
-                fontSize = 12.sp,
-                color = Color(0xFF7F8C8D)
             )
         }
     }
 }
 
+// Individual chat message bubble
 @Composable
-private fun Header(onBack: () -> Unit) {
-    androidx.compose.foundation.layout.Row(
+private fun ChatBubble(message: ChatMessage) {
+    val isUser = message.isUser
+    Row(
         modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
+        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
     ) {
-        androidx.compose.material3.IconButton(onClick = onBack) {
-            Icon(
-                imageVector = AppIcons.INSTANCE.Back,
-                contentDescription = "Back",
-                tint = Color(0xFF2C3E50)
-            )
-        }
-        androidx.compose.foundation.layout.Spacer(modifier = Modifier.size(8.dp))
-        Column {
-            Text(
-                text = "Talk with AI",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF2C3E50)
-            )
-            Text(
-                text = "Voice only conversation",
-                fontSize = 12.sp,
-                color = Color(0xFF7F8C8D)
-            )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.82f)
+                .clip(RoundedCornerShape(16.dp))
+                .background(if (isUser) Color(0xFF2F80ED) else Color.White)
+                .padding(horizontal = 14.dp, vertical = 10.dp)
+        ) {
+            Column {
+                Text(
+                    text = if (isUser) "You" else "AI",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isUser) Color(0xFFD6E8FF) else Color(0xFF7F8C8D)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = message.text,
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
+                    color = if (isUser) Color.White else Color(0xFF2C3E50)
+                )
+            }
         }
     }
+}
+
+// Start listening with SpeechRecognizer
+private fun startListening(
+    recognizer: SpeechRecognizer?,
+    onListeningStateChange: (Boolean) -> Unit
+) {
+    val recognizerInstance = recognizer ?: return
+    val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+        putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+        putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
+    }
+    onListeningStateChange(true)
+    recognizerInstance.startListening(intent)
+}
+
+// Placeholder for Gemini API integration - replace with actual implementation
+fun fetchGeminiResponse(
+    userText: String,
+    callback: (String) -> Unit
+) {
+    Thread {
+        try {
+            // TODO: Integrate with Google Gemini API here
+            // Example using OkHttp/Retrofit:
+            // val request = GeminiRequest(
+            //     contents = listOf(Content(
+            //         parts = listOf(Part(text = userText))
+            //     ))
+            // )
+            // val call = geminiService.generateContent(request)
+            // val response = call.execute().body()
+            // callback(response?.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text ?: "Sorry, I didn't understand.")
+
+            // Placeholder response for testing
+            val response = when {
+                userText.contains("hello", ignoreCase = true) ->
+                    "Hello! How can I help you today?"
+                userText.contains("how are you", ignoreCase = true) ->
+                    "I'm doing well, thank you for asking!"
+                userText.contains("bye", ignoreCase = true) ->
+                    "Goodbye! Have a great day!"
+                else ->
+                    "I heard you say: $userText. How can I assist you further?"
+            }
+            callback(response)
+        } catch (e: Exception) {
+            Log.e("ChatScreen", "Gemini API error", e)
+            callback("Sorry, I encountered an error. Please try again.")
+        }
+    }.start()
 }

@@ -1,5 +1,6 @@
 package com.example.masterenglishfluency.api
 
+import com.example.masterenglishfluency.BuildConfig
 import android.util.Base64
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
@@ -13,9 +14,7 @@ import java.net.URL
 object GeminiVoiceService {
     private const val TAG = "GeminiVoiceService"
 
-    // Developer can configure their Gemini API Key here.
-    // If left blank, it will automatically fall back to the offline mock bilingual loop.
-    internal const val GEMINI_API_KEY = ""
+    private val geminiApiKey: String = BuildConfig.GEMINI_API_KEY
 
     suspend fun processAudio(
         audioFile: File,
@@ -24,11 +23,11 @@ object GeminiVoiceService {
         historyContext: String,
         userRealSpeech: String
     ): Pair<String, String> = withContext(Dispatchers.IO) {
-        if (GEMINI_API_KEY.isBlank()) {
+        if (geminiApiKey.isBlank()) {
             throw IllegalStateException("Gemini API Key is not configured.")
         }
 
-        val urlConnection = URL("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$GEMINI_API_KEY")
+        val urlConnection = URL("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$geminiApiKey")
             .openConnection() as HttpURLConnection
 
         try {
@@ -110,15 +109,76 @@ object GeminiVoiceService {
         }
     }
 
+    suspend fun transcribeAudio(audioFile: File) = withContext(Dispatchers.IO) {
+        if (geminiApiKey.isBlank()) {
+            throw IllegalStateException("Gemini API Key is not configured.")
+        }
+
+        val urlConnection = URL("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$geminiApiKey")
+            .openConnection() as HttpURLConnection
+
+        try {
+            val audioBytes = audioFile.readBytes()
+            val base64Audio = Base64.encodeToString(audioBytes, Base64.NO_WRAP)
+            val promptText = "Transcribe the spoken audio exactly as the user said it. Return only the transcript text."
+
+            val root = JSONObject().apply {
+                put("contents", org.json.JSONArray().apply {
+                    put(JSONObject().apply {
+                        put("parts", org.json.JSONArray().apply {
+                            put(JSONObject().apply {
+                                put("text", promptText)
+                            })
+                            put(JSONObject().apply {
+                                put("inlineData", JSONObject().apply {
+                                    put("mimeType", "audio/mp4")
+                                    put("data", base64Audio)
+                                })
+                            })
+                        })
+                    })
+                })
+            }
+
+            urlConnection.requestMethod = "POST"
+            urlConnection.setRequestProperty("Content-Type", "application/json")
+            urlConnection.doOutput = true
+            urlConnection.connectTimeout = 15000
+            urlConnection.readTimeout = 15000
+
+            OutputStreamWriter(urlConnection.outputStream).use { writer ->
+                writer.write(root.toString())
+                writer.flush()
+            }
+
+            val responseCode = urlConnection.responseCode
+            if (responseCode == HttpURLConnection.HTTP_OK) {
+                val responseText = urlConnection.inputStream.bufferedReader().use { it.readText() }
+                val responseJson = JSONObject(responseText)
+                val candidates = responseJson.getJSONArray("candidates")
+                val firstCandidate = candidates.getJSONObject(0)
+                val content = firstCandidate.getJSONObject("content")
+                val parts = content.getJSONArray("parts")
+                parts.getJSONObject(0).optString("text").trim()
+            } else {
+                val errorText = urlConnection.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                Log.e(TAG, "HTTP Error Code $responseCode: $errorText")
+                throw Exception("API call failed with HTTP $responseCode")
+            }
+        } finally {
+            urlConnection.disconnect()
+        }
+    }
+
     suspend fun evaluateReading(
         originalParagraph: String,
         userSpeechText: String
     ): String = withContext(Dispatchers.IO) {
-        if (GEMINI_API_KEY.isBlank()) {
+        if (geminiApiKey.isBlank()) {
             throw IllegalStateException("Gemini API Key is not configured.")
         }
 
-        val urlConnection = URL("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$GEMINI_API_KEY")
+        val urlConnection = URL("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$geminiApiKey")
             .openConnection() as HttpURLConnection
 
         try {

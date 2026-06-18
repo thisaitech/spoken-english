@@ -34,7 +34,7 @@ DEFAULT_JVM_OPTS=""
 MAX_FD="maximum"
 
 warn () {
-    echo "$*"
+    echo "$*"  
 }
 
 die () {
